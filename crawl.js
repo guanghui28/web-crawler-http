@@ -36,7 +36,23 @@ export function getURLsFromHTML(htmlBody, baseURL) {
 	return urls;
 }
 
-export async function crawlPage(currentURL) {
+export async function crawlPage(baseURL, currentURL, pages) {
+	const baseURLObj = new URL(baseURL);
+	const currentURLObj = new URL(currentURL);
+
+	if (currentURLObj.hostname !== baseURLObj.hostname) {
+		return pages;
+	}
+
+	const normalizedCurrentURL = normalizeURL(currentURL);
+
+	if (pages[normalizedCurrentURL] > 0) {
+		pages[normalizedCurrentURL]++;
+		return pages;
+	}
+
+	pages[normalizedCurrentURL] = 1;
+
 	console.log(`actively crawling: ${currentURL}`);
 
 	try {
@@ -46,7 +62,7 @@ export async function crawlPage(currentURL) {
 			console.log(
 				`Error in fetch with status code: ${resp.status} on page: ${currentURL}`
 			);
-			return;
+			return pages;
 		}
 
 		const contentType = resp.headers.get("content-type");
@@ -54,11 +70,19 @@ export async function crawlPage(currentURL) {
 			console.log(
 				`Non html response, content type: ${contentType}, on page: ${currentURL}`
 			);
-			return;
+			return pages;
 		}
 
-		console.log(await resp.text());
+		const htmlBody = await resp.text();
+
+		const nextURLs = getURLsFromHTML(htmlBody, baseURL);
+
+		for (const nextURL of nextURLs) {
+			pages = await crawlPage(baseURL, nextURL, pages);
+		}
 	} catch (error) {
 		console.log(`error in fetch: ${error.message} on page: ${currentURL}`);
 	}
+
+	return pages;
 }
